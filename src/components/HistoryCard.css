@@ -1,0 +1,32 @@
+.history-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.history-card__rounds {
+  font-weight: 600;
+}
+
+.history-card__outcome {
+  font-size: 14px;
+}
+
+.history-card__outcome--win {
+  color: var(--green);
+}
+
+.history-card__outcome--loss {
+  color: #ff7a72;
+}
+
+.history-card__time {
+  flex-shrink: 0;
+  color: var(--soft-gray);
+  font-size: 14px;
+}

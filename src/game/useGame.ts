@@ -201,6 +201,7 @@ export function useGame() {
     status,
     displayRound,
     completedRounds: state.completedRounds,
+    gameId,
     activeColor,
     pressedColor,
     resultVisible,

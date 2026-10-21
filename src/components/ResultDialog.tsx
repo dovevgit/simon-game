@@ -5,10 +5,17 @@ import './ResultDialog.css';
 type ResultDialogProps = {
   outcome: 'won' | 'lost';
   completedRounds: number;
+  // The result could not be written to the history.
+  saveFailed: boolean;
   onConfirm: () => void;
 };
 
-export default function ResultDialog({ outcome, completedRounds, onConfirm }: ResultDialogProps) {
+export default function ResultDialog({
+  outcome,
+  completedRounds,
+  saveFailed,
+  onConfirm,
+}: ResultDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -36,6 +43,11 @@ export default function ResultDialog({ outcome, completedRounds, onConfirm }: Re
         <p id="result-detail" className="result-dialog__detail">
           {completedRoundsText(completedRounds)}
         </p>
+        {saveFailed && (
+          <p className="result-dialog__error" role="alert">
+            לא ניתן לשמור את התוצאה במכשיר זה.
+          </p>
+        )}
         <button ref={confirmRef} type="button" className="btn-primary" onClick={onConfirm}>
           אישור
         </button>

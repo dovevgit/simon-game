@@ -29,3 +29,40 @@
   font-size: 14px;
   text-align: center;
 }
+
+.about__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.about__error {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--red);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Secondary button: dark surface with an outline (DESIGN.md §2.3) */
+.about__delete {
+  display: block;
+  width: min(100%, 320px);
+  min-height: 48px;
+  margin-inline: auto;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--white);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.about__delete:focus-visible {
+  outline: 3px solid var(--white);
+  outline-offset: 2px;
+}

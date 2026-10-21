@@ -1,10 +1,12 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import confetti from 'canvas-confetti';
+import { StrictMode } from 'react';
 import App from './App.tsx';
 import * as audio from './audio/audioEngine.ts';
 import type { ColorId } from './game/colors.ts';
 import { randomColor } from './game/random.ts';
+import { HISTORY_KEY } from './history/historyStorage.ts';
 
 vi.mock('./game/random.ts', () => ({ randomColor: vi.fn(() => 'green') }));
 vi.mock('./audio/audioEngine.ts', () => ({
@@ -77,7 +79,12 @@ async function startGame() {
   await clickStart();
 }
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   mockedRandom.mockReset();
   mockedRandom.mockReturnValue('green');
@@ -609,5 +616,224 @@ describe('Sound and confetti', () => {
 
     await advance(5000);
     expect(startedTones()).toHaveLength(1);
+  });
+});
+
+describe('Game history', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+  });
+
+  function goTo(name: 'בית' | 'אודות') {
+    fireEvent.click(within(getNav()).getByRole('button', { name }));
+  }
+
+  function historyCards() {
+    const list = screen.queryByRole('list');
+    return list ? within(list).queryAllByRole('listitem') : [];
+  }
+
+  function storedResults(): { completedRounds: number; outcome: string }[] {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw).results : [];
+  }
+
+  function blockStorage(method: 'getItem' | 'setItem' | 'removeItem') {
+    vi.spyOn(Storage.prototype, method).mockImplementation(() => {
+      throw new Error('blocked');
+    });
+  }
+
+  // From the home screen before a game: completes `completedRounds` rounds, then presses a wrong color.
+  async function playAndLose(completedRounds: number) {
+    await clickStart();
+    for (let round = 1; round <= completedRounds; round++) {
+      await advance(presentationMs(round, round > 1));
+      for (let i = 0; i < round; i++) tap('green');
+    }
+    const round = completedRounds + 1;
+    await advance(presentationMs(round, round > 1));
+    tap('red');
+  }
+
+  async function playAndWin() {
+    await clickStart();
+    for (let round = 1; round <= 10; round++) {
+      await advance(presentationMs(round, round > 1));
+      for (let i = 0; i < round; i++) tap('green');
+    }
+  }
+
+  async function confirmResult() {
+    await advance(1000);
+    fireEvent.click(screen.getByRole('button', { name: 'אישור' }));
+  }
+
+  it('records a loss right away, before the result message is shown', async () => {
+    render(<App />);
+    await playAndLose(0);
+    goTo('אודות');
+
+    const cards = historyCards();
+    expect(cards).toHaveLength(1);
+    expect(within(cards[0]).getByText('לא השלמת אף שלב')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('הפסד')).toBeInTheDocument();
+    expect(cards[0].querySelector('time')).toHaveAttribute('datetime');
+    expect(screen.getByRole('button', { name: 'מחק היסטוריה' })).toBeInTheDocument();
+    expect(screen.queryByText('עדיין אין משחקים שמורים.')).not.toBeInTheDocument();
+  });
+
+  it('records a win with 10 completed rounds', async () => {
+    render(<App />);
+    await playAndWin();
+    goTo('אודות');
+
+    const cards = historyCards();
+    expect(cards).toHaveLength(1);
+    expect(within(cards[0]).getByText('השלמת 10 שלבים')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('ניצחון')).toBeInTheDocument();
+    expect(storedResults()).toMatchObject([{ completedRounds: 10, outcome: 'win' }]);
+  });
+
+  it('records a decided game exactly once', async () => {
+    render(<App />);
+    await playAndLose(2);
+    goTo('אודות');
+    goTo('בית');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    fireEvent(document, new Event('visibilitychange'));
+    await confirmResult();
+
+    expect(storedResults()).toHaveLength(1);
+    goTo('אודות');
+    expect(historyCards()).toHaveLength(1);
+  });
+
+  it('records once under React Strict Mode', async () => {
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    await playAndLose(1);
+    await confirmResult();
+
+    expect(storedResults()).toMatchObject([{ completedRounds: 1, outcome: 'loss' }]);
+    goTo('אודות');
+    expect(historyCards()).toHaveLength(1);
+  });
+
+  it('does not record a paused game or one cut off by a refresh', async () => {
+    const { unmount } = render(<App />);
+    await clickStart();
+    await advance(presentationMs(1, false));
+    tap('green');
+    goTo('אודות');
+    expect(historyCards()).toHaveLength(0);
+    expect(screen.getByText('עדיין אין משחקים שמורים.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'מחק היסטוריה' })).not.toBeInTheDocument();
+
+    unmount();
+    render(<App />);
+    goTo('אודות');
+    expect(historyCards()).toHaveLength(0);
+    expect(localStorage.getItem(HISTORY_KEY)).toBeNull();
+  });
+
+  it('keeps the 10 newest games, newest first, across a refresh', async () => {
+    const { unmount } = render(<App />);
+    for (let completed = 0; completed <= 10; completed++) {
+      if (completed === 10) await playAndWin();
+      else await playAndLose(completed);
+      await confirmResult();
+    }
+
+    unmount();
+    render(<App />);
+    goTo('אודות');
+    const cards = historyCards();
+    expect(cards).toHaveLength(10);
+    expect(within(cards[0]).getByText('השלמת 10 שלבים')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('ניצחון')).toBeInTheDocument();
+    expect(within(cards[9]).getByText('השלמת שלב אחד')).toBeInTheDocument();
+    expect(screen.queryByText('לא השלמת אף שלב')).not.toBeInTheDocument();
+  });
+
+  it('"ביטול" keeps the history; "מחק" empties it', async () => {
+    render(<App />);
+    await playAndLose(0);
+    goTo('אודות');
+
+    fireEvent.click(screen.getByRole('button', { name: 'מחק היסטוריה' }));
+    const dialog = screen.getByRole('dialog', { name: 'למחוק את ההיסטוריה?' });
+    expect(within(dialog).getByText('כל תוצאות המשחקים יימחקו.')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'ביטול' })).toHaveFocus();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ביטול' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(historyCards()).toHaveLength(1);
+    expect(storedResults()).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'מחק היסטוריה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'מחק' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(historyCards()).toHaveLength(0);
+    expect(screen.getByText('עדיין אין משחקים שמורים.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'מחק היסטוריה' })).not.toBeInTheDocument();
+    expect(localStorage.getItem(HISTORY_KEY)).toBeNull();
+  });
+
+  it('shows a save failure in the result message and keeps the game playable', async () => {
+    blockStorage('setItem');
+    render(<App />);
+    await playAndLose(0);
+    await advance(1000);
+
+    expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent(
+      'לא ניתן לשמור את התוצאה במכשיר זה.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'אישור' }));
+    await clickStart();
+    expect(screen.getByText('המשחק מציג את הרצף')).toBeInTheDocument();
+  });
+
+  it('shows a load failure in About and keeps the game playable', async () => {
+    localStorage.setItem(HISTORY_KEY, '{not json');
+    render(<App />);
+    goTo('אודות');
+    expect(screen.getByRole('alert')).toHaveTextContent('לא ניתן לקרוא את ההיסטוריה במכשיר זה.');
+    expect(screen.queryByText('עדיין אין משחקים שמורים.')).not.toBeInTheDocument();
+
+    goTo('בית');
+    await playAndLose(0);
+    goTo('אודות');
+    // The next save replaces the unreadable data with a valid list.
+    expect(historyCards()).toHaveLength(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(storedResults()).toHaveLength(1);
+  });
+
+  it('shows a load failure when storage is blocked', () => {
+    blockStorage('getItem');
+    render(<App />);
+    goTo('אודות');
+    expect(screen.getByRole('alert')).toHaveTextContent('לא ניתן לקרוא את ההיסטוריה במכשיר זה.');
+  });
+
+  it('shows a delete failure and keeps the list', async () => {
+    render(<App />);
+    await playAndLose(0);
+    goTo('אודות');
+    blockStorage('removeItem');
+
+    fireEvent.click(screen.getByRole('button', { name: 'מחק היסטוריה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'מחק' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('המחיקה נכשלה. ההיסטוריה לא נמחקה.');
+    expect(historyCards()).toHaveLength(1);
+    expect(storedResults()).toHaveLength(1);
   });
 });

@@ -1,0 +1,65 @@
+.confirm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgb(0 0 0 / 0.7);
+}
+
+/* Light card over the dark UI, as in the mockup */
+.confirm-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(100%, 340px);
+  padding: var(--space-4) var(--space-3) var(--space-3);
+  background: var(--white);
+  border: 1px solid var(--soft-gray);
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+  color: var(--charcoal);
+  text-align: center;
+}
+
+.confirm-dialog__title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.confirm-dialog__detail {
+  color: #4a4a4a;
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.confirm-dialog__btn {
+  flex: 1;
+  min-height: 48px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm-dialog__btn--cancel {
+  background: var(--soft-gray);
+  color: var(--charcoal);
+}
+
+.confirm-dialog__btn--delete {
+  background: var(--red);
+  color: var(--white);
+}
+
+.confirm-dialog__btn:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}

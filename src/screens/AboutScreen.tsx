@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog.tsx';
+import HistoryCard from '../components/HistoryCard.tsx';
+import type { HistoryView } from '../history/useHistory.ts';
 import './AboutScreen.css';
 
 const INSTRUCTIONS = [
@@ -7,7 +11,24 @@ const INSTRUCTIONS = [
   'אם הצלילים לא נשמעים באייפון – בדוק שמתג השקט כבוי.',
 ];
 
-export default function AboutScreen() {
+type AboutScreenProps = {
+  history: HistoryView;
+};
+
+export default function AboutScreen({ history }: AboutScreenProps) {
+  const [confirming, setConfirming] = useState(false);
+  const { results } = history;
+
+  function openConfirm() {
+    history.dismissDeleteError();
+    setConfirming(true);
+  }
+
+  function handleDelete() {
+    setConfirming(false);
+    history.clear();
+  }
+
   return (
     <section className="about">
       <h1 className="screen-title">אודות</h1>
@@ -20,7 +41,35 @@ export default function AboutScreen() {
       </div>
 
       <h2 className="about__heading">10 המשחקים האחרונים</h2>
-      <p className="about__empty">עדיין אין משחקים שמורים.</p>
+      {results.length > 0 ? (
+        <ol className="about__list">
+          {results.map((result) => (
+            <HistoryCard key={result.id} result={result} />
+          ))}
+        </ol>
+      ) : history.loadError ? (
+        <p className="about__error" role="alert">
+          לא ניתן לקרוא את ההיסטוריה במכשיר זה.
+        </p>
+      ) : (
+        <p className="about__empty">עדיין אין משחקים שמורים.</p>
+      )}
+
+      {history.deleteError && (
+        <p className="about__error" role="alert">
+          המחיקה נכשלה. ההיסטוריה לא נמחקה.
+        </p>
+      )}
+
+      {results.length > 0 && (
+        <button type="button" className="about__delete" onClick={openConfirm}>
+          מחק היסטוריה
+        </button>
+      )}
+
+      {confirming && (
+        <ConfirmDialog onCancel={() => setConfirming(false)} onConfirm={handleDelete} />
+      )}
     </section>
   );
 }
