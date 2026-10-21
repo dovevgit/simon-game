@@ -102,7 +102,7 @@ describe('App shell', () => {
   it('renders the home screen before a game starts', () => {
     render(<App />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'סיימון' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'דובב' })).toBeInTheDocument();
     expect(screen.getByText('שלב 1 מתוך 10')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'התחל משחק' })).toBeInTheDocument();
   });

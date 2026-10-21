@@ -29,7 +29,7 @@ export default function HomeScreen({ game }: HomeScreenProps) {
 
   return (
     <section className="home">
-      <h1 className="screen-title">סיימון</h1>
+      <h1 className="screen-title">דובב</h1>
       <p className="home__stage">{`שלב ${game.displayRound} מתוך ${TOTAL_ROUNDS}`}</p>
       {/* Status line keeps its height so the board doesn't jump between states */}
       <p className="home__status" aria-live="polite">
