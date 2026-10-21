@@ -1,7 +1,7 @@
 import type { ColorId } from './colors.ts';
 import { TOTAL_ROUNDS } from './constants.ts';
 
-export type GameStatus = 'idle' | 'presenting' | 'awaitingInput' | 'won' | 'lost';
+export type GameStatus = 'idle' | 'presenting' | 'awaitingInput' | 'paused' | 'won' | 'lost';
 
 export type GameState = {
   status: GameStatus;
@@ -22,8 +22,8 @@ export type GameAction =
   | { type: 'presentationDone'; presentationId: number }
   | { type: 'press'; color: ColorId; nextColor: ColorId }
   | { type: 'dismiss' }
-  // Temporary until Milestone 4 replaces it with a real pause.
-  | { type: 'abandon' };
+  | { type: 'pause' }
+  | { type: 'resume' };
 
 export const initialGameState: GameState = {
   status: 'idle',
@@ -91,12 +91,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         presentationId: state.presentationId,
       };
 
-    case 'abandon':
+    // Keeps the sequence and round; partial input is discarded and any running presentation goes stale.
+    case 'pause':
       if (state.status !== 'presenting' && state.status !== 'awaitingInput') return state;
       return {
-        ...initialGameState,
-        gameId: state.gameId,
+        ...state,
+        status: 'paused',
+        inputIndex: 0,
         presentationId: state.presentationId + 1,
+        roundAdvanced: false,
+      };
+
+    // Replays the whole sequence of the same round; no color is added.
+    case 'resume':
+      if (state.status !== 'paused') return state;
+      return {
+        ...state,
+        status: 'presenting',
+        inputIndex: 0,
+        presentationId: state.presentationId + 1,
+        roundAdvanced: false,
       };
   }
 }

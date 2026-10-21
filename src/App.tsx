@@ -12,8 +12,8 @@ export default function App() {
   const game = useGame();
 
   function handleNavigate(next: Screen) {
-    // Temporary until Milestone 4: leaving for About cancels an active game.
-    if (next === 'about') game.abandon();
+    // Leaving for About pauses an active game; coming back never resumes it on its own.
+    if (next === 'about') game.pause();
     setScreen(next);
   }
 

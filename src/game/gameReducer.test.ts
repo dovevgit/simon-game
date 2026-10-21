@@ -123,15 +123,78 @@ describe('gameReducer', () => {
     expect(gameReducer(state, { type: 'dismiss' })).toBe(state);
   });
 
-  it('abandon cancels an active game without a result', () => {
-    const state = finishPresentation(reachRound(3));
-    const abandoned = gameReducer(state, { type: 'abandon' });
-    expect(abandoned.status).toBe('idle');
-    expect(abandoned.round).toBe(1);
-    expect(abandoned.presentationId).toBe(state.presentationId + 1);
+  it('pause keeps the sequence and round from a presentation', () => {
+    const state = reachRound(3);
+    const paused = gameReducer(state, { type: 'pause' });
+    expect(paused.status).toBe('paused');
+    expect(paused.sequence).toBe(state.sequence);
+    expect(paused.round).toBe(3);
+    expect(paused.completedRounds).toBe(2);
+    expect(paused.gameId).toBe(state.gameId);
+    expect(paused.presentationId).toBe(state.presentationId + 1);
+    expect(paused.roundAdvanced).toBe(false);
+  });
 
+  it('pause during the player turn discards partial input', () => {
+    let state = finishPresentation(reachRound(3));
+    state = gameReducer(state, { type: 'press', color: state.sequence[0], nextColor: 'red' });
+    expect(state.inputIndex).toBe(1);
+
+    const paused = gameReducer(state, { type: 'pause' });
+    expect(paused.status).toBe('paused');
+    expect(paused.inputIndex).toBe(0);
+    expect(paused.round).toBe(3);
+    expect(paused.sequence).toEqual(state.sequence);
+  });
+
+  it('pause does nothing outside an active game', () => {
+    const lost = apply(finishPresentation(started('green')), { type: 'press', color: 'red', nextColor: 'red' });
     const won = completeRound(reachRound(10));
-    expect(gameReducer(won, { type: 'abandon' })).toBe(won);
+    const paused = gameReducer(started(), { type: 'pause' });
+    for (const state of [initialGameState, lost, won, paused]) {
+      expect(gameReducer(state, { type: 'pause' })).toBe(state);
+    }
+  });
+
+  it('a paused game ignores presses, start and the presentation that was cancelled', () => {
+    const state = started();
+    const paused = gameReducer(state, { type: 'pause' });
+    expect(gameReducer(paused, { type: 'presentationDone', presentationId: state.presentationId })).toBe(paused);
+    expect(gameReducer(paused, { type: 'press', color: 'green', nextColor: 'red' })).toBe(paused);
+    expect(gameReducer(paused, { type: 'start', firstColor: 'red' })).toBe(paused);
+    expect(gameReducer(paused, { type: 'dismiss' })).toBe(paused);
+  });
+
+  it('resume replays the same round with no new color', () => {
+    const paused = gameReducer(finishPresentation(reachRound(4)), { type: 'pause' });
+    const resumed = gameReducer(paused, { type: 'resume' });
+    expect(resumed.status).toBe('presenting');
+    expect(resumed.sequence).toEqual(paused.sequence);
+    expect(resumed.sequence).toHaveLength(4);
+    expect(resumed.round).toBe(4);
+    expect(resumed.inputIndex).toBe(0);
+    expect(resumed.roundAdvanced).toBe(false);
+    expect(resumed.presentationId).toBe(paused.presentationId + 1);
+
+    // The whole sequence must be repeated again from its start.
+    expect(finishPresentation(resumed).inputIndex).toBe(0);
+  });
+
+  it('resume does nothing unless the game is paused', () => {
+    const presenting = started();
+    expect(gameReducer(presenting, { type: 'resume' })).toBe(presenting);
+    expect(gameReducer(initialGameState, { type: 'resume' })).toBe(initialGameState);
+    const resumed = apply(presenting, { type: 'pause' }, { type: 'resume' });
+    expect(gameReducer(resumed, { type: 'resume' })).toBe(resumed);
+  });
+
+  it('pausing between rounds resumes the next round without adding another color', () => {
+    const advanced = completeRound(reachRound(2), 'blue');
+    expect(advanced.roundAdvanced).toBe(true);
+    const resumed = apply(advanced, { type: 'pause' }, { type: 'resume' });
+    expect(resumed.round).toBe(3);
+    expect(resumed.sequence).toHaveLength(3);
+    expect(resumed.sequence[2]).toBe('blue');
   });
 });
 

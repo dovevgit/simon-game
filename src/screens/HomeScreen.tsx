@@ -17,7 +17,15 @@ export default function HomeScreen({ game }: HomeScreenProps) {
   } else if (status === 'awaitingInput') {
     statusText = 'התור שלך';
     hintText = 'הקש על הצבעים לפי הסדר';
+  } else if (status === 'paused') {
+    statusText = 'המשחק מושהה';
   }
+
+  const audioErrorText = game.audioError && (
+    <p className="home__error" role="alert">
+      לא הצלחנו להפעיל את הצליל. הקש שוב על הכפתור.
+    </p>
+  );
 
   return (
     <section className="home">
@@ -30,7 +38,7 @@ export default function HomeScreen({ game }: HomeScreenProps) {
       <SimonBoard
         activeColor={game.activeColor}
         pressedColor={game.pressedColor}
-        dimmed={status === 'presenting'}
+        dimmed={status === 'presenting' || status === 'paused'}
         interactive={status === 'awaitingInput'}
         onPadDown={game.press}
       />
@@ -38,13 +46,17 @@ export default function HomeScreen({ game }: HomeScreenProps) {
         {hintText && <p className="home__hint">{hintText}</p>}
         {status === 'idle' && (
           <>
-            {game.audioError && (
-              <p className="home__error" role="alert">
-                לא הצלחנו להפעיל את הצליל. הקש שוב על הכפתור.
-              </p>
-            )}
+            {audioErrorText}
             <button type="button" className="btn-primary" onClick={game.start}>
               התחל משחק
+            </button>
+          </>
+        )}
+        {status === 'paused' && (
+          <>
+            {audioErrorText}
+            <button type="button" className="btn-primary" onClick={game.resume}>
+              המשך משחק
             </button>
           </>
         )}

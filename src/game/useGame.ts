@@ -3,7 +3,7 @@ import * as audio from '../audio/audioEngine.ts';
 import { clearConfetti, fireWinConfetti } from '../effects/confetti.ts';
 import type { ColorId } from './colors.ts';
 import { PRESS_MIN_MS, RESULT_DELAY_MS } from './constants.ts';
-import { gameReducer, initialGameState } from './gameReducer.ts';
+import { gameReducer, initialGameState, type GameAction } from './gameReducer.ts';
 import { randomColor } from './random.ts';
 import { playPresentation } from './sequencePlayer.ts';
 
@@ -24,6 +24,11 @@ export function useGame() {
   const confettiGameId = useRef(0);
 
   const { status, sequence, round, roundAdvanced, presentationId, gameId } = state;
+  // Latest status for stable callbacks that are registered as event listeners.
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   // Sequence playback; aborting cancels every pending timer and ignores the stale completion.
   useEffect(() => {
@@ -131,8 +136,8 @@ export function useGame() {
     [status, endPress],
   );
 
-  // Called from the "התחל משחק" click: the audio unlock must happen inside that gesture.
-  const start = useCallback(() => {
+  // The audio unlock must happen inside the click gesture; the action is dispatched only once audio works.
+  const unlockThen = useCallback((createAction: () => GameAction) => {
     if (unlocking.current) return;
     unlocking.current = true;
     audio
@@ -140,15 +145,24 @@ export function useGame() {
       .then(
         () => {
           setAudioError(false);
-          dispatch({ type: 'start', firstColor: randomColor() });
+          dispatch(createAction());
         },
-        // Never start a silent sequence; the player can tap again.
+        // Never play a silent sequence; the player can tap again.
         () => setAudioError(true),
       )
       .finally(() => {
         unlocking.current = false;
       });
   }, []);
+
+  // Called from the "התחל משחק" click.
+  const start = useCallback(
+    () => unlockThen(() => ({ type: 'start', firstColor: randomColor() })),
+    [unlockThen],
+  );
+
+  // Called from the "המשך משחק" click.
+  const resume = useCallback(() => unlockThen(() => ({ type: 'resume' })), [unlockThen]);
 
   const dismiss = useCallback(() => {
     setResultVisible(false);
@@ -157,12 +171,27 @@ export function useGame() {
     dispatch({ type: 'dismiss' });
   }, [endPress]);
 
-  const abandon = useCallback(() => {
-    if (status !== 'presenting' && status !== 'awaitingInput') return;
+  // Stable, so it can be registered once as an event listener. Decided games are not affected.
+  const pause = useCallback(() => {
+    if (statusRef.current !== 'presenting' && statusRef.current !== 'awaitingInput') return;
+    statusRef.current = 'paused';
     endPress();
     audio.stopAll();
-    dispatch({ type: 'abandon' });
-  }, [status, endPress]);
+    dispatch({ type: 'pause' });
+  }, [endPress]);
+
+  // Hiding the app pauses it; becoming visible again never resumes on its own.
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') pause();
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', pause);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', pause);
+    };
+  }, [pause]);
 
   const holdingPreviousRound =
     status === 'presenting' && roundAdvanced && revealedPresentationId !== presentationId;
@@ -179,7 +208,8 @@ export function useGame() {
     start,
     press,
     dismiss,
-    abandon,
+    pause,
+    resume,
   };
 }
 

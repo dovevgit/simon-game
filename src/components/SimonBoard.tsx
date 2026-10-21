@@ -5,7 +5,7 @@ import './SimonBoard.css';
 type SimonBoardProps = {
   activeColor: ColorId | null;
   pressedColor: ColorId | null;
-  // Unlit pads are dimmed while the sequence is shown.
+  // Unlit pads are dimmed while the sequence is shown or the game is paused.
   dimmed: boolean;
   interactive: boolean;
   onPadDown: (color: ColorId, held: boolean) => void;
