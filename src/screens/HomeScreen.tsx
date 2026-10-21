@@ -37,9 +37,16 @@ export default function HomeScreen({ game }: HomeScreenProps) {
       <div className="home__actions">
         {hintText && <p className="home__hint">{hintText}</p>}
         {status === 'idle' && (
-          <button type="button" className="btn-primary" onClick={game.start}>
-            התחל משחק
-          </button>
+          <>
+            {game.audioError && (
+              <p className="home__error" role="alert">
+                לא הצלחנו להפעיל את הצליל. הקש שוב על הכפתור.
+              </p>
+            )}
+            <button type="button" className="btn-primary" onClick={game.start}>
+              התחל משחק
+            </button>
+          </>
         )}
       </div>
     </section>

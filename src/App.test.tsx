@@ -1,11 +1,31 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import confetti from 'canvas-confetti';
 import App from './App.tsx';
+import * as audio from './audio/audioEngine.ts';
 import type { ColorId } from './game/colors.ts';
 import { randomColor } from './game/random.ts';
 
 vi.mock('./game/random.ts', () => ({ randomColor: vi.fn(() => 'green') }));
+vi.mock('./audio/audioEngine.ts', () => ({
+  unlock: vi.fn(),
+  startTone: vi.fn(),
+  playWin: vi.fn(),
+  playLoss: vi.fn(),
+  stopAll: vi.fn(),
+}));
+vi.mock('canvas-confetti', () => ({ default: Object.assign(vi.fn(), { reset: vi.fn() }) }));
+
 const mockedRandom = vi.mocked(randomColor);
+const mockedAudio = vi.mocked(audio);
+const mockedConfetti = vi.mocked(confetti);
+
+// Stop functions returned by startTone, in call order.
+const toneStops: ReturnType<typeof vi.fn>[] = [];
+
+function startedTones(): ColorId[] {
+  return mockedAudio.startTone.mock.calls.map(([color]) => color);
+}
 
 const COLOR_LABELS: Record<ColorId, string> = {
   green: 'ירוק',
@@ -46,9 +66,29 @@ function tap(color: ColorId) {
   fireEvent.pointerUp(window);
 }
 
+// The audio unlock resolves asynchronously before the game starts.
+async function clickStart() {
+  fireEvent.click(screen.getByRole('button', { name: 'התחל משחק' }));
+  await act(async () => {});
+}
+
+async function startGame() {
+  render(<App />);
+  await clickStart();
+}
+
 beforeEach(() => {
+  vi.clearAllMocks();
   mockedRandom.mockReset();
   mockedRandom.mockReturnValue('green');
+  mockedAudio.unlock.mockReset();
+  mockedAudio.unlock.mockResolvedValue(undefined);
+  toneStops.length = 0;
+  mockedAudio.startTone.mockImplementation(() => {
+    const stop = vi.fn();
+    toneStops.push(stop);
+    return stop;
+  });
 });
 
 describe('App shell', () => {
@@ -109,14 +149,9 @@ describe('Game flow', () => {
     vi.useRealTimers();
   });
 
-  function startGame() {
-    render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'התחל משחק' }));
-  }
-
   it('presents round 1 with the required pacing, then hands over to the player', async () => {
     mockedRandom.mockReturnValueOnce('red');
-    startGame();
+    await startGame();
 
     expect(screen.getByText('המשחק מציג את הרצף')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'התחל משחק' })).not.toBeInTheDocument();
@@ -136,7 +171,7 @@ describe('Game flow', () => {
   });
 
   it('ignores presses while the sequence is shown', async () => {
-    startGame();
+    await startGame();
     await advance(1000);
 
     tap('red'); // wrong color, but input is blocked
@@ -146,7 +181,7 @@ describe('Game flow', () => {
   });
 
   it('lights the pressed pad for at least 300ms, or while held', async () => {
-    startGame();
+    await startGame();
     await advance(presentationMs(1, false));
     mockedRandom.mockReturnValue('green');
 
@@ -161,7 +196,7 @@ describe('Game flow', () => {
 
   it('moves to the next round with the round-change pauses and an extended sequence', async () => {
     mockedRandom.mockReturnValueOnce('red').mockReturnValueOnce('blue');
-    startGame();
+    await startGame();
     await advance(presentationMs(1, false));
 
     tap('red');
@@ -184,7 +219,7 @@ describe('Game flow', () => {
   });
 
   it('shows the loss message one second after a wrong press at round 1', async () => {
-    startGame();
+    await startGame();
     await advance(presentationMs(1, false));
 
     tap('red');
@@ -200,7 +235,7 @@ describe('Game flow', () => {
   });
 
   it('reports completed rounds when losing later in the game', async () => {
-    startGame();
+    await startGame();
     await advance(presentationMs(1, false));
     tap('green');
     await advance(presentationMs(2, true));
@@ -213,7 +248,7 @@ describe('Game flow', () => {
   });
 
   it('wins after round 10, then "אישור" returns to a fresh start', async () => {
-    startGame();
+    await startGame();
     for (let round = 1; round <= 10; round++) {
       await advance(presentationMs(round, round > 1));
       for (let i = 0; i < round; i++) tap('green');
@@ -230,13 +265,13 @@ describe('Game flow', () => {
     expect(screen.getByText('שלב 1 מתוך 10')).toBeInTheDocument();
 
     mockedRandom.mockReturnValueOnce('yellow');
-    fireEvent.click(screen.getByRole('button', { name: 'התחל משחק' }));
+    await clickStart();
     await advance(1000);
     expect(litPads()).toEqual(['yellow']);
   });
 
   it('leaving for About mid-game cancels it with no highlight or timer left', async () => {
-    startGame();
+    await startGame();
     await advance(1100); // a pad is lit
     expect(litPads()).toHaveLength(1);
 
@@ -250,7 +285,7 @@ describe('Game flow', () => {
   });
 
   it('keeps a decided result across a visit to About until "אישור"', async () => {
-    startGame();
+    await startGame();
     await advance(presentationMs(1, false));
     tap('red');
 
@@ -260,5 +295,128 @@ describe('Game flow', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('נפסלת!')).toBeInTheDocument();
+  });
+});
+
+describe('Sound and confetti', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function winGame() {
+    await startGame();
+    for (let round = 1; round <= 10; round++) {
+      await advance(presentationMs(round, round > 1));
+      for (let i = 0; i < round; i++) tap('green');
+    }
+  }
+
+  it('does not start a silent game when audio cannot be enabled, and allows a retry', async () => {
+    mockedAudio.unlock.mockRejectedValueOnce(new Error('blocked'));
+    await startGame();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'לא הצלחנו להפעיל את הצליל. הקש שוב על הכפתור.',
+    );
+    expect(screen.queryByText('המשחק מציג את הרצף')).not.toBeInTheDocument();
+    await advance(5000);
+    expect(mockedAudio.startTone).not.toHaveBeenCalled();
+    expect(litPads()).toEqual([]);
+
+    await clickStart();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('המשחק מציג את הרצף')).toBeInTheDocument();
+    expect(mockedAudio.unlock).toHaveBeenCalledTimes(2);
+  });
+
+  it('plays the color tone together with each flash of the sequence', async () => {
+    mockedRandom.mockReturnValueOnce('red');
+    await startGame();
+
+    await advance(1000);
+    expect(startedTones()).toEqual(['red']);
+    expect(toneStops[0]).not.toHaveBeenCalled();
+    await advance(600);
+    expect(toneStops[0]).toHaveBeenCalled();
+  });
+
+  it('sounds a press immediately and keeps it for at least 300ms', async () => {
+    await startGame();
+    await advance(presentationMs(1, false));
+    mockedAudio.startTone.mockClear();
+    toneStops.length = 0;
+
+    fireEvent.pointerDown(getPad('green'));
+    expect(startedTones()).toEqual(['green']);
+    fireEvent.pointerUp(window);
+    await advance(299);
+    expect(toneStops[0]).not.toHaveBeenCalled();
+    await advance(1);
+    expect(toneStops[0]).toHaveBeenCalled();
+  });
+
+  it('a wrong press sounds its color at once and the loss sound one second later, without confetti', async () => {
+    await startGame();
+    await advance(presentationMs(1, false));
+    mockedAudio.startTone.mockClear();
+
+    tap('blue');
+    expect(startedTones()).toEqual(['blue']);
+    await advance(999);
+    expect(mockedAudio.playLoss).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await advance(1);
+    expect(mockedAudio.playLoss).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(mockedAudio.playWin).not.toHaveBeenCalled();
+    expect(mockedConfetti).not.toHaveBeenCalled();
+  });
+
+  it('a win plays the win sound and confetti once, cleared by "אישור"', async () => {
+    await winGame();
+    await advance(999);
+    expect(mockedAudio.playWin).not.toHaveBeenCalled();
+    expect(mockedConfetti).not.toHaveBeenCalled();
+    await advance(1);
+
+    expect(mockedAudio.playWin).toHaveBeenCalledTimes(1);
+    expect(mockedConfetti).toHaveBeenCalled();
+    const bursts = mockedConfetti.mock.calls.length;
+    await advance(5000);
+    expect(mockedConfetti).toHaveBeenCalledTimes(bursts);
+    expect(mockedAudio.playLoss).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'אישור' }));
+    expect(mockedConfetti.reset).toHaveBeenCalled();
+    expect(mockedAudio.stopAll).toHaveBeenCalled();
+  });
+
+  it('skips confetti when reduced motion is preferred', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce') }));
+    try {
+      await winGame();
+      await advance(1000);
+      expect(mockedAudio.playWin).toHaveBeenCalledTimes(1);
+      expect(mockedConfetti).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('leaving for About mid-game silences all sound', async () => {
+    await startGame();
+    await advance(1100); // a tone is playing
+    expect(startedTones()).toHaveLength(1);
+
+    fireEvent.click(within(getNav()).getByRole('button', { name: 'אודות' }));
+    expect(mockedAudio.stopAll).toHaveBeenCalled();
+    expect(toneStops[0]).toHaveBeenCalled();
+
+    await advance(5000);
+    expect(startedTones()).toHaveLength(1);
   });
 });

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:lan": "vite --host",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
@@ -12,6 +13,7 @@
   },
   "dependencies": {
     "@fontsource/heebo": "^5.3.0",
+    "canvas-confetti": "^1.9.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
@@ -20,6 +22,7 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

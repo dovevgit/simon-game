@@ -6,6 +6,12 @@
       "runtimeExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "simon-lan",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+      "runtimeArgs": ["run", "dev:lan"],
+      "port": 5173
     }
   ]
 }
