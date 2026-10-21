@@ -18,5 +18,14 @@
 }
 
 .home__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
   margin-top: var(--space-3);
+}
+
+.home__hint {
+  color: var(--soft-gray);
+  text-align: center;
 }

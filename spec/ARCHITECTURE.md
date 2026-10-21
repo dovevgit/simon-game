@@ -283,4 +283,12 @@ type HistoryData = {
 
 ## החלטות מרכזיות (ADRs)
 
-> יתווספו כאן במהלך הבנייה, לפי הפורמט ב-`CLAUDE.md`.
+### ADR-1: חיווי השלב בהמתנת מעבר שלב נגזר ב-Hook, לא ב-Reducer
+**הקשר:** לפי `DESIGN.md` §1.1, אחרי שחזור נכון החיווי מציג עוד `1000ms` את השלב שהושלם, ורק אז את מספר השלב הבא. לפי §2.3 כלל 9, ההמתנה הזו היא חלק מ-`presenting` של השלב הבא, ו-`round` כבר עודכן ב-Reducer.
+**החלטה:** ה-Reducer מסמן `roundAdvanced: true` כשה-`presenting` נכנס מהשלמת שלב. `playPresentation` (`src/game/sequencePlayer.ts`) ממתין `ROUND_HOLD_MS`, קורא ל-`onRevealRound`, ממתין `NEXT_ROUND_DELAY_MS` ואז מאיר. `useGame` שומר את ה-`presentationId` שכבר "נחשף", ו-`displayRound` הוא `round - 1` עד אז. אין מצב Reducer נוסף.
+**השלכות:** אין קפיצה רגעית של מספר השלב לפני ההמתנה. ביטול ההצגה (`abandon`, ובהמשך `pause`) מבטל גם את ההמתנה הזו דרך אותו `AbortController`. ב-Milestone 4, חידוש ממצב `paused` יעבור כהצגה רגילה (`roundAdvanced: false`), עם המתנת `START_DELAY_MS`.
+
+### ADR-2: גרסאות הכלים – Vite 8, TypeScript 7, Vitest 5
+**הקשר:** ב-Milestone 1 הותקנו הגרסאות היציבות העדכניות, נעולות ב-`package-lock.json`.
+**החלטה:** הפרויקט עובד עם React 19, Vite 8, TypeScript 7 (`tsc -b` לבדיקת טיפוסים), Vitest 5 ו-jsdom.
+**השלכות:** לפני התקנת `vite-plugin-pwa` ב-Milestone 7 יש לוודא שהוא תומך ב-Vite 8. אם לא, תתקבל החלטה על גרסה ותתועד כ-ADR.
