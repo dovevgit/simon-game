@@ -59,3 +59,5 @@
 > Claude ממלא זאת ברגע שהאפליקציה יכולה לרוץ (בדרך כלל בסיום Milestone 1), ומעדכן אם משהו משתנה.
 - **הרצה (dev):** `npm run dev` ← `http://localhost:5173/simon-game/` (בדפדפן המובנה: `preview_start` עם התצורה `simon-dev` מ-`.claude/launch.json`)
 - **בדיקות (test):** `npm run test` (וגם `npm run typecheck`, `npm run build`)
+- **בדיקת Build מקומית:** `npm run build` ואז `npm run preview` ← `http://localhost:4173/simon-game/`
+- **Production:** `https://dovevgit.github.io/simon-game/` – מתעדכן אוטומטית בכל Push ל-`main` (`.github/workflows/deploy.yml`)
