@@ -1,0 +1,76 @@
+.simon-board {
+  /* Fit the board to both narrow and short phone screens */
+  --board-size: min(100%, 320px, 42dvh);
+  --board-gap: 12px;
+
+  position: relative;
+  direction: ltr;
+  display: grid;
+  grid-template-areas:
+    'green red'
+    'yellow blue';
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: var(--board-gap);
+  width: var(--board-size);
+  aspect-ratio: 1;
+  margin-inline: auto;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--charcoal);
+  border: 3px solid var(--border);
+  box-shadow:
+    0 10px 30px rgb(0 0 0 / 0.45),
+    inset 0 0 12px rgb(0 0 0 / 0.6);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.simon-board__pad {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.simon-board__pad--green {
+  grid-area: green;
+  background: var(--green);
+  border-top-left-radius: 100%;
+}
+
+.simon-board__pad--red {
+  grid-area: red;
+  background: var(--red);
+  border-top-right-radius: 100%;
+}
+
+.simon-board__pad--yellow {
+  grid-area: yellow;
+  background: var(--yellow);
+  border-bottom-left-radius: 100%;
+}
+
+.simon-board__pad--blue {
+  grid-area: blue;
+  background: var(--blue);
+  border-bottom-right-radius: 100%;
+}
+
+/* Decorative center disc; never receives input */
+.simon-board__center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--charcoal);
+  border: 4px solid var(--border);
+  box-shadow: 0 0 0 6px var(--charcoal);
+  pointer-events: none;
+}
